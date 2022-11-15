@@ -2,12 +2,12 @@ from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.utils import executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.utils import executor
 
 from googletrans import Translator
 from datetime import datetime
-from threading import Thread
+import asyncio
 
 import os
 from dotenv import load_dotenv, find_dotenv
@@ -22,7 +22,6 @@ countries = []
 chat_id = 0
 
 #______________________________________________________________________________________________
-# SET-GET-UPDATE FUNCTION
 
 def set_user(name, id):
     check = False
@@ -35,67 +34,21 @@ def set_user(name, id):
         write_users()
     return check
 
-def check_change(id):
-    for user in users:
-        if user[1] == id:
-            return user[2]
+swear_words = ['сука', 'блять', 'бля', 'заебал', 'пидор', 'мудак', 'гнида', 'падла', 'уебок', 'пиздец', 'тупой']
 
-def get_lang(country):
-    if country == 'США': 
-        return 'en'
-    elif country == 'Россия':
-        return 'ru'
-    elif country == 'Япония':
-        return 'ja'
-    elif country == 'Россия':
-        return 'ru'
-    elif country == 'Китай':
-        return 'zh-cn'
-    elif country == 'Испания':
-        return 'es'
-    elif country == 'Бразилия':
-        return 'pt'
-    elif country == 'Франция':
-        return 'fr'
-    elif country == 'Италия':
-        return 'it'
-    elif country == 'Норвегия':
-        return 'no'
-    elif country == 'Египет':
-        return 'ar'
-    elif country == 'ОАЭ':
-        return 'ar'
-    elif country == 'Индия':
-        return 'hi'
-    elif country == 'Турция':
-        return 'tr'
-    elif country == 'Мексика':
-        return 'es'
-    elif country == 'Куба':
-        return 'es'
-    elif country == 'Ирландия':
-        return 'ga'
-    elif country == 'Англия':
-        return 'en'
-    elif country == 'Германия':
-        return 'de'
-    elif country == 'Казахстан':
-        return 'kk'
-    elif country == 'Южная Корея':
-        return 'ko'
-    elif country == 'Греция':
-        return 'el'
-    elif country == 'Грузия':
-        return 'ka'
-    else: return 'ru'
+languages = {'США':'en', 'Россия':'ru', 'Япония':'ja', 'Китай':'zh-cn', 'Испания':'es', 'Бразилия':'pt', 'Франция':'fr', 'Италия':'it', 'Норвегия':'no', 
+          'Египет':'ar', 'ОАЭ':'ar', 'Индия':'hi', 'Турция':'tr', 'Мексика':'es', 'Куба':'es', 'Ирландия':'ga', 'Англия':'ga', 'Германия':'de', 'Казахстан':'kk',
+          'Южная Корея':'ko', 'Греция':'el', 'Грузия':'ka'}
 
-def clean_states():
+async def clean_states():
     while True:
         if datetime.now().hour%4 == 0 and datetime.now().minute == 0 and datetime.now().second == 0:
             for line in users:
-                dp.current_state(user = line[1]).finish()
+                await dp.current_state(user = line[1]).finish()
+        await asyncio.sleep(1)
 
-thread_clean_states = Thread(target=clean_states)
+async def on_startup(_):
+    asyncio.create_task(clean_states())
 
 #______________________________________________________________________________________________
 # INPUT-OUTPUT FUNCTION
@@ -186,121 +139,147 @@ class Choose(StatesGroup):
     waiting_for_yesno = State()
 
 def register_handlers(dp: Dispatcher):
-    dp.register_message_handler(set_chat_id, commands="setchatid", state="*")
+    dp.register_message_handler(ad_set_chat_id, commands="setchatid", state="*")
+    dp.register_message_handler(ad_set_default, commands="reset", state="*")
+    dp.register_message_handler(ad_get_all, commands="getall", state="*")
+    dp.register_message_handler(ad_get_cr, commands="getcr", state="*")
     dp.register_message_handler(send_start, commands="start", state="*")
-    dp.register_message_handler(send_help, commands="help", state="*")
-    dp.register_message_handler(set_default, commands="reset", state="*")
-    dp.register_message_handler(get_all, commands="getall", state="*")
     dp.register_message_handler(send_start_again, state=None)
     dp.register_message_handler(start_choosen, state=Choose.waiting_for_start)
     dp.register_message_handler(number_choosen, state=Choose.waiting_for_number)
     dp.register_message_handler(yesno_choosen, state=Choose.waiting_for_yesno)
 
-async def set_chat_id(msg: types.Message):
+async def ad_set_chat_id(msg: types.Message):
     global chat_id
-    chat_id = msg.chat.id
-    write_chat_id()
+    if msg.chat.id < 0:
+        if msg.from_user.id == 788094142:
+            chat_id = msg.chat.id
+            write_chat_id()
+            await msg.answer(msg.chat.id)
+        else: await msg.answer('Недостаточно прав') 
 
-async def send_start_again(msg: types.Message, state: FSMContext):
-    await msg.answer("Нажми на \"Выбрать страну\"", reply_markup=start_keyboard())
-    await state.set_state(Choose.waiting_for_start)
+async def ad_set_default(msg: types.Message):
+    global users
+    global countries
+    global chat_id
+    if msg.chat.id > 0:
+        if msg.from_user.id == 788094142:
+            for line in countries:
+                line[1] = 'none'
+            write_countries()
+            for line in users:
+                line[2] = False
+            write_users()
+            chat_id = 0
+            write_chat_id()
+            await msg.answer('Значения сброшены')
+        else: await msg.answer('Недостаточно прав') 
+
+async def ad_get_all(msg: types.Message):
+    global users
+    global countries
+    global chat_id
+    if msg.chat.id > 0:
+        if msg.from_user.id == 788094142:
+            message = ''
+            for line in countries:
+                if line[1] != 'none':
+                    message += line[1] + '\n'
+            message += '\n'
+            for line in users:
+                message += line[0] + ' ' + str(line[1]) + ' ' + str(line[2]) + '\n'
+            message += '\nchat: ' + str(chat_id)
+            await msg.answer(message) 
+        else: await msg.answer('Недостаточно прав') 
+
+async def ad_get_cr(msg: types.Message):
+    global countries
+    if msg.chat.id > 0:
+        if msg.from_user.id == 788094142:
+            message = ''
+            for line in countries:
+                message += line[0] + ': ' + line[1] + '\n'
+            await msg.answer(message) 
+        else: await msg.answer('Недостаточно прав') 
 
 async def send_start(msg: types.Message, state: FSMContext):
-    member = await bot.get_chat_member(chat_id, msg.from_user.id)
-    if member["status"] != "left":
-        set_user(msg.from_user.first_name, msg.from_user.id)
-        await msg.answer(f"Привет, {msg.from_user.first_name}!\n\n\
-Нажми на \"Выбрать страну\" для начала", reply_markup=start_keyboard())
-        await state.set_state(Choose.waiting_for_start.state)
-    else:
-        await msg.answer("Привет, к сожалению, тебя нет в списке допустимых пользователей")
-
-async def send_help(msg: types.Message):
-    await msg.answer("Вот что я могу:\n\n/start - начать чат\n\n/help - получить список команд\n\n\
-/reset - сбросить список\n\n/getall - получить список")
-
-async def set_default(msg: types.Message):
-    global countries
-    if msg.from_user.id == 788094142:
-        for line in countries:
-            line[1] = 'none'
-        write_countries()
-        for line in users:
-            line[2] = False
-        write_users()
-        await msg.answer('Значения сброшены')
-    else:
-        await msg.answer('Недостаточно прав') 
-
-async def get_all(msg: types.Message):
-    global countries
-    if msg.from_user.id == 788094142:
-        message = ''
-        for line in countries:
-            message += line[0] + ': ' + line[1] + '\n'
-        await msg.answer(message) 
-    else:
-        await msg.answer('Недостаточно прав') 
+    global chat_id
+    if msg.chat.id > 0:
+        member = await bot.get_chat_member(chat_id, msg.from_user.id)
+        if member["status"] != "left":
+            set_user(msg.from_user.first_name, msg.from_user.id)
+            await msg.answer(f"Привет, {msg.from_user.first_name}.\n\nНажми на \"Выбрать страну\" для начала", reply_markup=start_keyboard())
+            await state.set_state(Choose.waiting_for_start.state)
+        else: await msg.answer(f"Привет, {msg.from_user.first_name}, к сожалению, тебя нет в списке допустимых пользователей")
+  
+async def send_start_again(msg: types.Message, state: FSMContext):
+    global chat_id
+    if msg.chat.id > 0:
+        member = await bot.get_chat_member(chat_id, msg.from_user.id)
+        if member["status"] != "left":
+            set_user(msg.from_user.first_name, msg.from_user.id)
+            await msg.answer("Нажми на \"Выбрать страну\"", reply_markup=start_keyboard())
+            await state.set_state(Choose.waiting_for_start)
+        else: await give_diff_answer(msg, state)
 
 async def start_choosen(msg: types.Message, state: FSMContext):
     global countries
-    if msg.text.lower() == 'выбрать страну':
-        check = True
-        for line in countries:
-            if msg.from_user.first_name == line[1] and check_change(msg.from_user.id) == False:
-                check = False
-                await msg.answer('Хочешь изменить выбор?', reply_markup=yesno_keyboard())
-                await state.set_state(Choose.waiting_for_yesno)
-                break
-            elif msg.from_user.first_name == line[1] and check_change(msg.from_user.id) == True:
-                check = False
-                await msg.answer('Больше выбирать нельзя', reply_markup=start_keyboard())
-                break
-        if check == True: 
-            await msg.answer("Выбери цифру из списка, и я отправлю тебе твою страну.\n\
-Ты так же сможешь сделать выбор повторно, но только один раз", reply_markup=number_keyboard())
-            await state.set_state(Choose.waiting_for_number)
-    else:
-        await give_diff_answer(msg, state)
+    if msg.chat.id > 0:
+        if msg.text.lower() == 'выбрать страну':
+            check = True
+            for line in countries:
+                if msg.from_user.first_name == line[1] and [msg.from_user.first_name, msg.from_user.id, False] in users:
+                    check = False
+                    await msg.answer('Хочешь изменить выбор?', reply_markup=yesno_keyboard())
+                    await state.set_state(Choose.waiting_for_yesno)
+                    break
+                elif msg.from_user.first_name == line[1] and [msg.from_user.first_name, msg.from_user.id, True] in users:
+                    check = False
+                    await msg.answer('Больше выбирать нельзя', reply_markup=start_keyboard())
+                    break
+            if check == True: 
+                await msg.answer("Выбери цифру из списка, и я отправлю тебе твою страну.\nТы так же сможешь сделать выбор повторно, но только один раз", reply_markup=number_keyboard())
+                await state.set_state(Choose.waiting_for_number)
+        else: await give_diff_answer(msg, state)
 
 async def number_choosen(msg: types.Message, state: FSMContext):
-    if msg.text.lower().isdigit():
-            if int(msg.text.lower()) <= len(countries) and int(msg.text.lower()) > 0:
-                if countries[int(msg.text.lower())-1][1] == 'none':
-                    countries[int(msg.text.lower())-1][1] = msg.from_user.full_name
+    global countries
+    if msg.chat.id > 0:
+        if msg.text.lower().isdigit():
+            if 0 < int(msg.text.lower()) <= len(countries):
+                num = int(msg.text.lower()) - 1
+                if countries[num][1] == 'none':
+                    countries[num][1] = msg.from_user.first_name
                     write_countries()
                     translator = Translator()
-                    translation = translator.translate('Отличный выбор', src='ru', dest=get_lang(countries[int(msg.text.lower())-1][0]))
-                    await msg.answer(f"{translation.text}! \
-Твоя страна - {countries[int(msg.text.lower())-1][0]}", reply_markup=start_keyboard())
+                    translation = translator.translate('Отличный выбор', src = 'ru', dest = languages[countries[num][0]] if countries[num][0] in languages else 'ru')
+                    await msg.answer(f"{translation.text}! Твоя страна - {countries[int(msg.text.lower())-1][0]}", reply_markup=start_keyboard())
                     await state.set_state(Choose.waiting_for_start)
-                else:
-                    await msg.answer("Выбери число из доступных на клавиатуре", reply_markup=number_keyboard())
-            else:
-                    await msg.answer("Выбери число из доступных на клавиатуре", reply_markup=number_keyboard())
-    else:
-        await give_diff_answer(msg, state)
+                else: await msg.answer("Выбери число из доступных на клавиатуре", reply_markup=number_keyboard())
+            else: await msg.answer("Выбери число из доступных на клавиатуре", reply_markup=number_keyboard())
+        else: await give_diff_answer(msg, state)
 
 async def yesno_choosen(msg: types.Message, state: FSMContext):
-    if msg.text.lower() == 'да':
-        for user in users:
-            if user[1] == msg.from_user.id:
-                user[2] = True
-        write_users()
-        for line in countries:
-            if (line[1] == msg.from_user.full_name):
-                line[1] = 'none'
-        write_countries()
-        await msg.answer("Выбери цифру из списка, и я отправлю тебе твою страну", reply_markup=number_keyboard())
-        await state.set_state(Choose.waiting_for_number)
-    elif msg.text.lower() == 'нет':
-        await msg.answer("Окей", reply_markup=start_keyboard())
-        await state.set_state(Choose.waiting_for_start)
-    else:
-        await give_diff_answer(msg, state)
+    global users
+    global countries
+    if msg.chat.id > 0:
+        if msg.text.lower() == 'да':
+            for user in users:
+                if user[1] == msg.from_user.id:
+                    user[2] = True
+            write_users()
+            for line in countries:
+                if (line[1] == msg.from_user.first_name):
+                    line[1] = 'none'
+            write_countries()
+            await msg.answer("Выбери цифру из списка, и я отправлю тебе твою страну", reply_markup=number_keyboard())
+            await state.set_state(Choose.waiting_for_number)
+        elif msg.text.lower() == 'нет':
+            await msg.answer("Окей", reply_markup=start_keyboard())
+            await state.set_state(Choose.waiting_for_start)
+        else: await give_diff_answer(msg, state)
 
-swear_words = ['сука', 'блять', 'бля', 'заебал', 'пидор', 'мудак', 'гнида', 'падла', 'уебок', 'пиздец', 'тупой']
-
+# ONLY FOR USING IN STATES FUNCTION
 async def give_diff_answer(msg: types.Message, state: FSMContext):
     for word in str(msg.text.lower()).split():
         if word in swear_words:
@@ -309,12 +288,11 @@ async def give_diff_answer(msg: types.Message, state: FSMContext):
             photo.close()
             return
     if msg.text.lower() == 'привет':
-        await msg.answer(f"Привет, {msg.from_user.full_name}")
-    else: 
-        await msg.answer('Не понимаю, что это значит')
+        await msg.answer(f"Привет, {msg.from_user.first_name}")
+    else: await msg.answer('Не понимаю, что это значит')
 
 #______________________________________________________________________________________________
-# MAIN FUNCTION      
+# MAIN     
 
 if __name__ == '__main__':
     read_chat_id()
@@ -322,8 +300,7 @@ if __name__ == '__main__':
     read_countries()
     try:
         register_handlers(dp)
-        thread_clean_states.start()
-        executor.start_polling(dp, skip_updates = True)
+        executor.start_polling(dp, skip_updates = True, on_startup=on_startup)
     finally:
         write_chat_id()
         write_users()
